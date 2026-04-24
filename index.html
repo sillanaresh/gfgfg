@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Elevator Lobby — v0</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="lobby">
+      <div class="lobby-floor-plaque" id="lobby-floor-plaque">10</div>
+      <div class="lift-wrap" id="lift-left">
+        <div class="lift-led">--</div>
+        <div class="lift-frame">
+          <div class="lift-interior"></div>
+          <div class="door door-left"></div>
+          <div class="door door-right"></div>
+        </div>
+      </div>
+      <div class="lift-wrap" id="lift-right">
+        <div class="lift-led">--</div>
+        <div class="lift-frame">
+          <div class="lift-interior"></div>
+          <div class="door door-left"></div>
+          <div class="door door-right"></div>
+        </div>
+      </div>
+      <div class="button" id="button">
+        <div class="btn-arrow btn-up" id="btn-up">▲</div>
+        <div class="btn-arrow btn-down" id="btn-down">▼</div>
+      </div>
+      <div class="character" id="character"></div>
+    </div>
+    <div class="edit-controls">
+      <button id="edit-toggle">Edit Layout</button>
+      <button id="edit-copy" hidden>Copy Positions</button>
+    </div>
+    <div id="edit-overlay" hidden></div>
+    <script src="app.js"></script>
+  </body>
+</html>
