@@ -215,25 +215,33 @@ scheduleBgCall();
 //   walking_to_lift → entering → invisible → idle
 
 const HOME_X = 20;
-const BUTTON_X = 321; // canvas positioned so figure centers on button (x=422)
-const LEFT_LIFT_X = 189; // canvas positioned so figure centers on left lift
-const RIGHT_LIFT_X = 449; // canvas positioned so figure centers on right lift
+const HOME_Y = 180;
+const BUTTON_X = 321;
+const LEFT_LIFT_X = 189;
+const RIGHT_LIFT_X = 449;
+// When entering the lift, shift the character's canvas up so its bottom
+// aligns with the lift frame bottom (y=389 = lift-y 159 + lift-h 230).
+// Canvas bottom = top + 322, so target top = 389 - 322 = 67.
+const LIFT_ENTRY_Y = 67;
 
 let state = 'idle';
 let activeLift = null;
 let requestedDirection = null;
 let charCurrentX = HOME_X;
+let charCurrentY = HOME_Y;
 
-function setCharX(targetX) {
+function setCharPos(targetX, targetY) {
   characterCanvas.classList.toggle('flipped', targetX < charCurrentX);
-  character.style.transform = `translateX(${targetX - HOME_X}px)`;
+  character.style.transform = `translate(${targetX - HOME_X}px, ${targetY - HOME_Y}px)`;
   charCurrentX = targetX;
+  charCurrentY = targetY;
 }
 
 function teleportHome() {
   character.style.transition = 'none';
-  character.style.transform = 'translateX(0)';
+  character.style.transform = 'translate(0, 0)';
   charCurrentX = HOME_X;
+  charCurrentY = HOME_Y;
   void character.offsetWidth;
   character.style.transition = '';
   characterCanvas.classList.remove('flipped');
@@ -243,7 +251,7 @@ character.addEventListener('click', () => {
   if (editMode) return;
   if (state !== 'idle') return;
   state = 'walking_to_button';
-  setCharX(BUTTON_X);
+  setCharPos(BUTTON_X, HOME_Y);
   setAnim('Walk');
 });
 
@@ -333,7 +341,8 @@ function onLiftArrived() {
 function walkIntoLift() {
   state = 'walking_to_lift';
   const targetX = activeLift.el.id === 'lift-left' ? LEFT_LIFT_X : RIGHT_LIFT_X;
-  setCharX(targetX);
+  // Shift character up so the full body fits inside the lift frame.
+  setCharPos(targetX, LIFT_ENTRY_Y);
   setAnim('Walk');
 }
 
