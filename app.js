@@ -71,6 +71,7 @@ function travelLiftTo(lift, destFloor, onArrive) {
     lift.direction = 'idle';
     renderLed(lift);
     if (onArrive) onArrive();
+    else checkPendingCall(lift);
     return;
   }
   lift.direction = lift.currentFloor < destFloor ? 'up' : 'down';
@@ -85,25 +86,33 @@ function travelLiftTo(lift, destFloor, onArrive) {
       lift.direction = 'idle';
       renderLed(lift);
       if (onArrive) onArrive();
+      else checkPendingCall(lift);
     }
   }, FLOOR_TRAVEL_MS);
 }
 
-function chooseLift() {
-  // v2 scheduler: pick lift with smallest cost to reach lobby.
-  // Cost = |currentFloor - LOBBY_FLOOR|, with small penalty if busy.
-  let best = null;
-  let bestCost = Infinity;
-  for (const lift of lifts) {
-    const distance = Math.abs(lift.currentFloor - LOBBY_FLOOR);
-    const busyPenalty = lift.direction !== 'idle' ? 3 : 0;
-    const cost = distance + busyPenalty;
-    if (cost < bestCost) {
-      bestCost = cost;
-      best = lift;
-    }
-  }
-  return best;
+// Real-elevator rule: a lift that is mid-trip finishes that trip before taking
+// a new call. Scheduler only considers idle lifts. If none are idle when a
+// call comes in, the call is queued and taken by whichever lift frees up next.
+let pendingCall = false;
+
+function chooseIdleLift() {
+  const idle = lifts.filter((l) => l.direction === 'idle');
+  if (idle.length === 0) return null;
+  return idle.reduce((best, l) =>
+    Math.abs(l.currentFloor - LOBBY_FLOOR) <
+    Math.abs(best.currentFloor - LOBBY_FLOOR)
+      ? l
+      : best
+  );
+}
+
+function checkPendingCall(lift) {
+  if (!pendingCall) return;
+  pendingCall = false;
+  activeLift = lift;
+  console.log('pending call taken by:', lift.el.id);
+  travelLiftTo(lift, LOBBY_FLOOR, onLiftArrived);
 }
 
 function dispatchLiftAway(lift, direction) {
@@ -203,14 +212,20 @@ function chooseDirection(dir) {
 }
 
 function summonLift() {
-  activeLift = chooseLift();
-  console.log(
-    'scheduler picked:',
-    activeLift.el.id,
-    'currently at floor',
-    activeLift.currentFloor
-  );
-  travelLiftTo(activeLift, LOBBY_FLOOR, onLiftArrived);
+  const chosen = chooseIdleLift();
+  if (chosen) {
+    activeLift = chosen;
+    console.log(
+      'scheduler picked:',
+      chosen.el.id,
+      'currently at floor',
+      chosen.currentFloor
+    );
+    travelLiftTo(chosen, LOBBY_FLOOR, onLiftArrived);
+  } else {
+    pendingCall = true;
+    console.log('no idle lift — call queued, waiting for one to free up');
+  }
 }
 
 function onLiftArrived() {
