@@ -30,9 +30,6 @@
   --char-h: 322px;
   --char-start-x: 20px;
   --char-start-y: 180px;
-
-  --char-end-x: calc(var(--button-x) - var(--char-w));
-  --char-end-y: var(--char-start-y);
 }
 
 * {
@@ -287,14 +284,13 @@ body {
   width: var(--char-w);
   height: var(--char-h);
   cursor: pointer;
-  transition: transform 1.5s ease-in-out;
+  opacity: 1;
+  transform: translateX(0);
+  transition: transform 1.5s ease-in-out, opacity 1s ease-in-out;
 }
 
-.character.walking {
-  transform: translate(
-    calc(var(--char-end-x) - var(--char-start-x)),
-    calc(var(--char-end-y) - var(--char-start-y))
-  );
+.character.fading {
+  opacity: 0;
 }
 
 .character-canvas {

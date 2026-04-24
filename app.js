@@ -55,18 +55,18 @@ function playDing() {
 // ---------- Rive character ----------
 
 let riveChar = null;
+let riveLoaded = false;
 try {
   riveChar = new rive.Rive({
     src: 'character.riv',
     canvas: characterCanvas,
-    autoplay: true,
+    autoplay: false,
     onLoad: () => {
       riveChar.resizeDrawingSurfaceToCanvas();
+      riveLoaded = true;
       console.log('Rive loaded. Animations:', riveChar.animationNames);
-      console.log('Rive state machines:', riveChar.stateMachineNames);
-      if (!riveChar.isPlaying && riveChar.animationNames.length > 0) {
-        riveChar.play(riveChar.animationNames[0]);
-      }
+      // Start with whatever the current state needs.
+      setAnim(isMovingState(state) ? 'Walk' : 'Idle');
     },
     onLoadError: (err) => console.error('Rive load failed:', err),
   });
@@ -74,16 +74,19 @@ try {
   console.error('Rive init failed:', err);
 }
 
-function playWalk() {
-  try {
-    if (riveChar) riveChar.play();
-  } catch (e) {}
+function isMovingState(s) {
+  return s === 'walking_to_button' || s === 'walking_to_lift';
 }
 
-function pauseWalk() {
+function setAnim(name) {
+  if (!riveLoaded || !riveChar) return;
   try {
-    if (riveChar) riveChar.pause();
-  } catch (e) {}
+    if (!riveChar.animationNames.includes(name)) return;
+    riveChar.stop(riveChar.playingAnimationNames);
+    riveChar.play(name);
+  } catch (e) {
+    console.error('setAnim error:', e);
+  }
 }
 
 // ---------- lift state + rendering ----------
@@ -208,34 +211,54 @@ function scheduleBgCall() {
 scheduleBgCall();
 
 // ---------- character interaction state machine ----------
-// idle → walking → at_button → arriving → opening → open → closing → returning → idle
+// idle → walking_to_button → at_button → arriving → opening → doors_open →
+//   walking_to_lift → entering → invisible → idle
+
+const HOME_X = 20;
+const BUTTON_X = 321; // canvas positioned so figure centers on button (x=422)
+const LEFT_LIFT_X = 189; // canvas positioned so figure centers on left lift
+const RIGHT_LIFT_X = 449; // canvas positioned so figure centers on right lift
 
 let state = 'idle';
 let activeLift = null;
 let requestedDirection = null;
+let charCurrentX = HOME_X;
+
+function setCharX(targetX) {
+  characterCanvas.classList.toggle('flipped', targetX < charCurrentX);
+  character.style.transform = `translateX(${targetX - HOME_X}px)`;
+  charCurrentX = targetX;
+}
+
+function teleportHome() {
+  character.style.transition = 'none';
+  character.style.transform = 'translateX(0)';
+  charCurrentX = HOME_X;
+  void character.offsetWidth;
+  character.style.transition = '';
+  characterCanvas.classList.remove('flipped');
+}
 
 character.addEventListener('click', () => {
   if (editMode) return;
   if (state !== 'idle') return;
-  state = 'walking';
-  characterCanvas.classList.remove('flipped');
-  character.classList.add('walking');
-  playWalk();
+  state = 'walking_to_button';
+  setCharX(BUTTON_X);
+  setAnim('Walk');
 });
 
 character.addEventListener('transitionend', (e) => {
   // Ignore bubbled transitionend from children (e.g. character-canvas flip).
   if (e.target !== character) return;
   if (e.propertyName !== 'transform') return;
-  if (state === 'walking') {
+  if (state === 'walking_to_button') {
     state = 'at_button';
-    pauseWalk();
+    setAnim('Idle');
     pressButton();
-  } else if (state === 'returning') {
-    state = 'idle';
-    pauseWalk();
-    characterCanvas.classList.remove('flipped');
-    console.log('reset complete, ready for next click');
+  } else if (state === 'walking_to_lift') {
+    state = 'entering';
+    setAnim('Idle');
+    enterLift();
   }
 });
 
@@ -244,15 +267,18 @@ lobby.addEventListener('transitionend', (e) => {
   if (!e.target.classList.contains('door')) return;
   if (!activeLift || !activeLift.frame.contains(e.target)) return;
   if (state === 'opening') {
-    state = 'open';
-    setTimeout(closeDoors, 1000);
-  } else if (state === 'closing') {
+    state = 'doors_open';
+    setTimeout(walkIntoLift, 500);
+  } else if (state === 'entering') {
+    state = 'invisible';
+    // Dispatch the lift away to its next random floor in the chosen direction.
     const lift = activeLift;
     const dir = requestedDirection;
     activeLift = null;
     requestedDirection = null;
     dispatchLiftAway(lift, dir);
-    returnCharacter();
+    // Wait 1.5s with character invisible, then teleport + fade in.
+    setTimeout(teleportAndReset, 1500);
   }
 });
 
@@ -304,16 +330,27 @@ function onLiftArrived() {
   }, 400);
 }
 
-function closeDoors() {
-  state = 'closing';
+function walkIntoLift() {
+  state = 'walking_to_lift';
+  const targetX = activeLift.el.id === 'lift-left' ? LEFT_LIFT_X : RIGHT_LIFT_X;
+  setCharX(targetX);
+  setAnim('Walk');
+}
+
+function enterLift() {
+  // Character is at the lift. Start fade-out + close doors in parallel.
+  character.classList.add('fading');
   activeLift.doors.forEach((d) => d.classList.remove('open'));
 }
 
-function returnCharacter() {
-  state = 'returning';
-  characterCanvas.classList.add('flipped');
-  character.classList.remove('walking');
-  playWalk();
+function teleportAndReset() {
+  teleportHome();
+  requestAnimationFrame(() => {
+    character.classList.remove('fading');
+  });
+  setAnim('Idle');
+  state = 'idle';
+  console.log('ready for next click');
 }
 
 // ---------- settings panel ----------
