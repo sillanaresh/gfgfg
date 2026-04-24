@@ -4,6 +4,7 @@ const FLOOR_TRAVEL_MS = 900;
 
 const lobby = document.querySelector('.lobby');
 const character = document.getElementById('character');
+const characterCanvas = document.getElementById('character-canvas');
 const button = document.getElementById('button');
 const btnUp = document.getElementById('btn-up');
 const btnDown = document.getElementById('btn-down');
@@ -25,8 +26,8 @@ function fitLobby() {
 fitLobby();
 window.addEventListener('resize', fitLobby);
 
-// Audio: synthesized ding chime. Browsers require user interaction
-// before audio plays, so we resume the context on first click.
+// ---------- audio ----------
+
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 document.addEventListener(
   'click',
@@ -50,6 +51,34 @@ function playDing() {
   osc.start(now);
   osc.stop(now + 1.05);
 }
+
+// ---------- Rive character ----------
+
+let riveChar = null;
+try {
+  riveChar = new rive.Rive({
+    src: 'character.riv',
+    canvas: characterCanvas,
+    autoplay: false,
+    onLoad: () => {
+      riveChar.resizeDrawingSurfaceToCanvas();
+      console.log('Rive loaded. Animations:', riveChar.animationNames);
+    },
+    onLoadError: (err) => console.error('Rive load failed:', err),
+  });
+} catch (err) {
+  console.error('Rive init failed:', err);
+}
+
+function playWalk() {
+  if (riveChar) riveChar.play();
+}
+
+function pauseWalk() {
+  if (riveChar) riveChar.pause();
+}
+
+// ---------- lift state + rendering ----------
 
 function randomFloor() {
   return Math.floor(Math.random() * MAX_FLOOR) + 1;
@@ -91,21 +120,45 @@ function travelLiftTo(lift, destFloor, onArrive) {
   }, FLOOR_TRAVEL_MS);
 }
 
-// Real-elevator rule: a lift that is mid-trip finishes that trip before taking
-// a new call. Scheduler only considers idle lifts. If none are idle when a
-// call comes in, the call is queued and taken by whichever lift frees up next.
-let pendingCall = false;
+// ---------- scheduling algorithms ----------
+
+const ALGORITHMS = {
+  nearest: {
+    name: 'Nearest idle',
+    choose: (idle) =>
+      idle.reduce((best, l) =>
+        Math.abs(l.currentFloor - LOBBY_FLOOR) <
+        Math.abs(best.currentFloor - LOBBY_FLOOR)
+          ? l
+          : best
+      ),
+  },
+  random: {
+    name: 'Random',
+    choose: (idle) => idle[Math.floor(Math.random() * idle.length)],
+  },
+  furthest: {
+    name: 'Furthest idle',
+    choose: (idle) =>
+      idle.reduce((best, l) =>
+        Math.abs(l.currentFloor - LOBBY_FLOOR) >
+        Math.abs(best.currentFloor - LOBBY_FLOOR)
+          ? l
+          : best
+      ),
+  },
+};
+
+let currentAlgorithm = localStorage.getItem('algo') || 'nearest';
+if (!ALGORITHMS[currentAlgorithm]) currentAlgorithm = 'nearest';
 
 function chooseIdleLift() {
   const idle = lifts.filter((l) => l.direction === 'idle');
   if (idle.length === 0) return null;
-  return idle.reduce((best, l) =>
-    Math.abs(l.currentFloor - LOBBY_FLOOR) <
-    Math.abs(best.currentFloor - LOBBY_FLOOR)
-      ? l
-      : best
-  );
+  return ALGORITHMS[currentAlgorithm].choose(idle);
 }
+
+let pendingCall = false;
 
 function checkPendingCall(lift) {
   if (!pendingCall) return;
@@ -123,8 +176,6 @@ function dispatchLiftAway(lift, direction) {
   travelLiftTo(lift, newFloor);
 }
 
-// Background traffic: every 4-9s, a ~70% chance an idle non-active lift
-// gets called to a new random floor — simulates other users on other floors.
 function backgroundCall() {
   const candidates = lifts.filter(
     (l) => l !== activeLift && l.direction === 'idle'
@@ -148,7 +199,7 @@ function scheduleBgCall() {
 }
 scheduleBgCall();
 
-// ---------- interaction state machine ----------
+// ---------- character interaction state machine ----------
 // idle → walking → at_button → arriving → opening → open → closing → returning → idle
 
 let state = 'idle';
@@ -159,16 +210,22 @@ character.addEventListener('click', () => {
   if (editMode) return;
   if (state !== 'idle') return;
   state = 'walking';
+  characterCanvas.classList.remove('flipped');
   character.classList.add('walking');
+  playWalk();
 });
 
 character.addEventListener('transitionend', (e) => {
   if (e.propertyName !== 'transform') return;
   if (state === 'walking') {
     state = 'at_button';
+    pauseWalk();
     pressButton();
   } else if (state === 'returning') {
     state = 'idle';
+    pauseWalk();
+    characterCanvas.classList.remove('flipped');
+    console.log('reset complete, ready for next click');
   }
 });
 
@@ -190,7 +247,6 @@ lobby.addEventListener('transitionend', (e) => {
 });
 
 function pressButton() {
-  // Character arrives at button and waits for user to click up or down.
   button.classList.add('awaiting');
 }
 
@@ -216,9 +272,9 @@ function summonLift() {
   if (chosen) {
     activeLift = chosen;
     console.log(
-      'scheduler picked:',
+      'scheduler (' + ALGORITHMS[currentAlgorithm].name + ') picked:',
       chosen.el.id,
-      'currently at floor',
+      'at floor',
       chosen.currentFloor
     );
     travelLiftTo(chosen, LOBBY_FLOOR, onLiftArrived);
@@ -245,12 +301,48 @@ function closeDoors() {
 
 function returnCharacter() {
   state = 'returning';
+  characterCanvas.classList.add('flipped');
   character.classList.remove('walking');
+  playWalk();
 }
 
-// ---------- edit mode: drag-to-position authoring tool ----------
+// ---------- settings panel ----------
 
-const editToggleBtn = document.getElementById('edit-toggle');
+const settingsIcon = document.getElementById('settings-icon');
+const settingsPanel = document.getElementById('settings-panel');
+
+settingsIcon.addEventListener('click', (e) => {
+  e.stopPropagation();
+  settingsPanel.hidden = !settingsPanel.hidden;
+});
+
+document.addEventListener('click', (e) => {
+  if (
+    !settingsPanel.hidden &&
+    !settingsPanel.contains(e.target) &&
+    !settingsIcon.contains(e.target)
+  ) {
+    settingsPanel.hidden = true;
+  }
+});
+
+const savedRadio = document.querySelector(
+  `input[name="algo"][value="${currentAlgorithm}"]`
+);
+if (savedRadio) savedRadio.checked = true;
+
+document.querySelectorAll('input[name="algo"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    if (radio.checked && ALGORITHMS[radio.value]) {
+      currentAlgorithm = radio.value;
+      localStorage.setItem('algo', radio.value);
+      console.log('algorithm switched to:', ALGORITHMS[radio.value].name);
+    }
+  });
+});
+
+// ---------- edit mode (dev only, toggled with 'E' key) ----------
+
 const editCopyBtn = document.getElementById('edit-copy');
 const editOverlay = document.getElementById('edit-overlay');
 const draggables = [
@@ -275,15 +367,6 @@ function getVirtualPos(clientX, clientY) {
   };
 }
 
-function setEditMode(on) {
-  editMode = on;
-  document.body.classList.toggle('edit-mode', on);
-  editToggleBtn.textContent = on ? 'Exit Edit' : 'Edit Layout';
-  editCopyBtn.hidden = !on;
-  editOverlay.hidden = !on;
-  if (on) updateOverlay();
-}
-
 function getDisplayPos(el) {
   const s = getComputedStyle(el);
   let left = Math.round(parseFloat(s.left));
@@ -291,7 +374,6 @@ function getDisplayPos(el) {
   let w = Math.round(parseFloat(s.width));
   let h = Math.round(parseFloat(s.height));
   if (el.classList.contains('lift-wrap')) {
-    // Report the door's position (not the LED+door wrap's top).
     const frame = el.querySelector('.lift-frame');
     top += frame.offsetTop;
     const fs = getComputedStyle(frame);
@@ -299,6 +381,14 @@ function getDisplayPos(el) {
     h = Math.round(parseFloat(fs.height));
   }
   return { left, top, w, h };
+}
+
+function setEditMode(on) {
+  editMode = on;
+  document.body.classList.toggle('edit-mode', on);
+  editCopyBtn.hidden = !on;
+  editOverlay.hidden = !on;
+  if (on) updateOverlay();
 }
 
 function updateOverlay(suffix = '') {
@@ -317,7 +407,6 @@ function updateOverlay(suffix = '') {
   ].join('\n');
 }
 
-editToggleBtn.addEventListener('click', () => setEditMode(!editMode));
 editCopyBtn.addEventListener('click', copyCoords);
 
 function copyCoords() {
