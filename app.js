@@ -59,10 +59,14 @@ try {
   riveChar = new rive.Rive({
     src: 'character.riv',
     canvas: characterCanvas,
-    autoplay: false,
+    autoplay: true,
     onLoad: () => {
       riveChar.resizeDrawingSurfaceToCanvas();
       console.log('Rive loaded. Animations:', riveChar.animationNames);
+      console.log('Rive state machines:', riveChar.stateMachineNames);
+      if (!riveChar.isPlaying && riveChar.animationNames.length > 0) {
+        riveChar.play(riveChar.animationNames[0]);
+      }
     },
     onLoadError: (err) => console.error('Rive load failed:', err),
   });
@@ -71,11 +75,15 @@ try {
 }
 
 function playWalk() {
-  if (riveChar) riveChar.play();
+  try {
+    if (riveChar) riveChar.play();
+  } catch (e) {}
 }
 
 function pauseWalk() {
-  if (riveChar) riveChar.pause();
+  try {
+    if (riveChar) riveChar.pause();
+  } catch (e) {}
 }
 
 // ---------- lift state + rendering ----------
@@ -216,6 +224,8 @@ character.addEventListener('click', () => {
 });
 
 character.addEventListener('transitionend', (e) => {
+  // Ignore bubbled transitionend from children (e.g. character-canvas flip).
+  if (e.target !== character) return;
   if (e.propertyName !== 'transform') return;
   if (state === 'walking') {
     state = 'at_button';

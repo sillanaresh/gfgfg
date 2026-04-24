@@ -26,13 +26,13 @@
   --button-w: 28px;
   --button-h: 44px;
 
-  --char-w: 100px;
-  --char-h: 160px;
-  --char-start-x: 60px;
-  --char-start-y: 290px;
+  --char-w: 202px;
+  --char-h: 322px;
+  --char-start-x: 20px;
+  --char-start-y: 180px;
 
-  --char-end-x: calc(var(--button-x) + var(--button-w) / 2 - var(--char-w) / 2);
-  --char-end-y: calc(var(--button-y) + var(--button-h) - var(--char-h));
+  --char-end-x: calc(var(--button-x) - var(--char-w));
+  --char-end-y: var(--char-start-y);
 }
 
 * {
@@ -218,6 +218,7 @@ body {
   flex-direction: column;
   justify-content: space-around;
   align-items: center;
+  z-index: 3;
   box-shadow:
     0 2px 5px rgba(0, 0, 0, 0.35),
     inset 0 1px 0 rgba(255, 250, 230, 0.4),
