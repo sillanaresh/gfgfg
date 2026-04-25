@@ -52,6 +52,42 @@ function playDing() {
   osc.stop(now + 1.05);
 }
 
+// Soft footstep — short low-passed noise burst.
+function playFootstep() {
+  if (audioCtx.state !== 'running') return;
+  const sr = audioCtx.sampleRate;
+  const buffer = audioCtx.createBuffer(1, sr * 0.08, sr);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.025));
+  }
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buffer;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 240;
+  filter.Q.value = 1.4;
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.13;
+  noise.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  noise.start(audioCtx.currentTime);
+}
+
+let footstepTimer = null;
+function startFootsteps() {
+  stopFootsteps();
+  playFootstep();
+  footstepTimer = setInterval(playFootstep, 480);
+}
+function stopFootsteps() {
+  if (footstepTimer) {
+    clearInterval(footstepTimer);
+    footstepTimer = null;
+  }
+}
+
 // ---------- Rive character ----------
 
 let riveChar = null;
@@ -219,13 +255,10 @@ const HOME_Y = 180;
 const BUTTON_X = 321;
 const LEFT_LIFT_X = 189;
 const RIGHT_LIFT_X = 449;
-// When entering the lift the character's canvas (322px tall) is bigger than
-// the lift frame (230px tall). We scale and shift so the scaled canvas
-// fits entirely inside the lift: feet on the lift's bottom edge, head
-// below the lift's top edge. transform-origin: bottom center keeps the
-// feet anchored as scale shrinks the canvas upward.
-const LIFT_ENTRY_Y = 67; // dy = -113 → bottom-center lands at y=389 (lift bottom)
-const LIFT_ENTRY_SCALE = 0.65; // scaled canvas height = 209 → fits in 230 lift
+// Canvas bottom aligns with lift frame bottom (y=389) so feet stand on
+// the lift's lower edge. No scaling — character keeps full size.
+const LIFT_ENTRY_Y = 67;
+const WALK_SPEED_PX_PER_SEC = 120;
 
 let state = 'idle';
 let activeLift = null;
@@ -233,23 +266,35 @@ let requestedDirection = null;
 let charCurrentX = HOME_X;
 let charCurrentY = HOME_Y;
 
-function setCharPos(targetX, targetY, scale = 1) {
+function setCharPos(targetX, targetY) {
   characterCanvas.classList.toggle('flipped', targetX < charCurrentX);
   const dx = targetX - HOME_X;
   const dy = targetY - HOME_Y;
-  character.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+  // Dynamic duration: walk takes longer for longer distances → consistent pace.
+  const moveDx = targetX - charCurrentX;
+  const moveDy = targetY - charCurrentY;
+  const distance = Math.sqrt(moveDx * moveDx + moveDy * moveDy);
+  const duration = Math.max(0.6, distance / WALK_SPEED_PX_PER_SEC);
+  character.style.transitionDuration = `${duration}s, 1s`;
+  character.style.transform = `translate(${dx}px, ${dy}px)`;
   charCurrentX = targetX;
   charCurrentY = targetY;
 }
 
 function teleportHome() {
   character.style.transition = 'none';
-  character.style.transform = 'translate(0, 0) scale(1)';
+  character.style.transform = 'translate(0, 0)';
   charCurrentX = HOME_X;
   charCurrentY = HOME_Y;
   void character.offsetWidth;
   character.style.transition = '';
+  character.style.transitionDuration = '';
   characterCanvas.classList.remove('flipped');
+}
+
+const clickHint = document.getElementById('click-hint');
+if (!localStorage.getItem('lobby-tutorial-seen')) {
+  clickHint.hidden = false;
 }
 
 character.addEventListener('click', () => {
@@ -258,6 +303,11 @@ character.addEventListener('click', () => {
   state = 'walking_to_button';
   setCharPos(BUTTON_X, HOME_Y);
   setAnim('Walk');
+  startFootsteps();
+  if (!clickHint.hidden) {
+    clickHint.hidden = true;
+    localStorage.setItem('lobby-tutorial-seen', '1');
+  }
 });
 
 character.addEventListener('transitionend', (e) => {
@@ -266,10 +316,12 @@ character.addEventListener('transitionend', (e) => {
   if (e.propertyName !== 'transform') return;
   if (state === 'walking_to_button') {
     state = 'at_button';
+    stopFootsteps();
     setAnim('Idle');
     pressButton();
   } else if (state === 'walking_to_lift') {
     state = 'entering';
+    stopFootsteps();
     setAnim('Idle');
     enterLift();
   }
@@ -346,10 +398,10 @@ function onLiftArrived() {
 function walkIntoLift() {
   state = 'walking_to_lift';
   const targetX = activeLift.el.id === 'lift-left' ? LEFT_LIFT_X : RIGHT_LIFT_X;
-  // Shift up + scale down so the full body sits inside the lift perimeter,
-  // feet on the lift's bottom edge.
-  setCharPos(targetX, LIFT_ENTRY_Y, LIFT_ENTRY_SCALE);
+  // Same size as before — feet land on the lift's bottom edge (no scaling).
+  setCharPos(targetX, LIFT_ENTRY_Y);
   setAnim('Walk');
+  startFootsteps();
 }
 
 function enterLift() {
@@ -359,6 +411,7 @@ function enterLift() {
 }
 
 function teleportAndReset() {
+  stopFootsteps();
   teleportHome();
   requestAnimationFrame(() => {
     character.classList.remove('fading');
