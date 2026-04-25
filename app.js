@@ -219,10 +219,13 @@ const HOME_Y = 180;
 const BUTTON_X = 321;
 const LEFT_LIFT_X = 189;
 const RIGHT_LIFT_X = 449;
-// When entering the lift, shift the character's canvas up so its bottom
-// aligns with the lift frame bottom (y=389 = lift-y 159 + lift-h 230).
-// Canvas bottom = top + 322, so target top = 389 - 322 = 67.
-const LIFT_ENTRY_Y = 67;
+// When entering the lift the character's canvas (322px tall) is bigger than
+// the lift frame (230px tall). We scale and shift so the scaled canvas
+// fits entirely inside the lift: feet on the lift's bottom edge, head
+// below the lift's top edge. transform-origin: bottom center keeps the
+// feet anchored as scale shrinks the canvas upward.
+const LIFT_ENTRY_Y = 67; // dy = -113 → bottom-center lands at y=389 (lift bottom)
+const LIFT_ENTRY_SCALE = 0.65; // scaled canvas height = 209 → fits in 230 lift
 
 let state = 'idle';
 let activeLift = null;
@@ -230,16 +233,18 @@ let requestedDirection = null;
 let charCurrentX = HOME_X;
 let charCurrentY = HOME_Y;
 
-function setCharPos(targetX, targetY) {
+function setCharPos(targetX, targetY, scale = 1) {
   characterCanvas.classList.toggle('flipped', targetX < charCurrentX);
-  character.style.transform = `translate(${targetX - HOME_X}px, ${targetY - HOME_Y}px)`;
+  const dx = targetX - HOME_X;
+  const dy = targetY - HOME_Y;
+  character.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
   charCurrentX = targetX;
   charCurrentY = targetY;
 }
 
 function teleportHome() {
   character.style.transition = 'none';
-  character.style.transform = 'translate(0, 0)';
+  character.style.transform = 'translate(0, 0) scale(1)';
   charCurrentX = HOME_X;
   charCurrentY = HOME_Y;
   void character.offsetWidth;
@@ -341,8 +346,9 @@ function onLiftArrived() {
 function walkIntoLift() {
   state = 'walking_to_lift';
   const targetX = activeLift.el.id === 'lift-left' ? LEFT_LIFT_X : RIGHT_LIFT_X;
-  // Shift character up so the full body fits inside the lift frame.
-  setCharPos(targetX, LIFT_ENTRY_Y);
+  // Shift up + scale down so the full body sits inside the lift perimeter,
+  // feet on the lift's bottom edge.
+  setCharPos(targetX, LIFT_ENTRY_Y, LIFT_ENTRY_SCALE);
   setAnim('Walk');
 }
 

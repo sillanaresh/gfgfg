@@ -285,7 +285,8 @@ body {
   height: var(--char-h);
   cursor: pointer;
   opacity: 1;
-  transform: translateX(0);
+  transform: translate(0, 0);
+  transform-origin: bottom center;
   transition: transform 1.5s ease-in-out, opacity 1s ease-in-out;
 }
 
