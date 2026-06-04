@@ -253,11 +253,11 @@ scheduleBgCall();
 const HOME_X = 20;
 const HOME_Y = 180;
 const BUTTON_X = 321;
-const LEFT_LIFT_X = 189;
-const RIGHT_LIFT_X = 449;
-// Canvas bottom aligns with lift frame bottom (y=389) so feet stand on
-// the lift's lower edge. No scaling — character keeps full size.
-const LIFT_ENTRY_Y = 67;
+const LEFT_LIFT_X = 183;
+const RIGHT_LIFT_X = 443;
+// The Rive canvas includes transparent space below the visible feet, so this
+// aligns the drawn feet with the lift floor rather than the element bottom.
+const LIFT_ENTRY_Y = 140;
 const WALK_SPEED_PX_PER_SEC = 120;
 
 let state = 'idle';
