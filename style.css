@@ -375,6 +375,8 @@ body {
   top: 50px;
   right: 0;
   width: 280px;
+  max-height: calc(100vh - 76px);
+  overflow-y: auto;
   background: linear-gradient(to bottom, #f0dcab 0%, #d4bd8a 100%);
   border: 2px solid #6a4a2a;
   border-radius: 4px;

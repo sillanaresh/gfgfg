@@ -2,7 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="theme-color" content="#1a1412" />
     <title>Elevator Lobby</title>
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="assets/favicon-32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="assets/favicon-16.png" sizes="16x16" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="manifest" href="site.webmanifest" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -52,6 +58,55 @@
           <div>
             <strong>Nearest idle</strong>
             <span class="desc">Closest idle lift wins. Smart default.</span>
+          </div>
+        </label>
+        <label class="algo-option">
+          <input type="radio" name="algo" value="eta" />
+          <div>
+            <strong>Shortest ETA</strong>
+            <span class="desc">Fastest idle lift to the lobby.</span>
+          </div>
+        </label>
+        <label class="algo-option">
+          <input type="radio" name="algo" value="look" />
+          <div>
+            <strong>LOOK</strong>
+            <span class="desc">Elevator-style scan with a small direction bias.</span>
+          </div>
+        </label>
+        <label class="algo-option">
+          <input type="radio" name="algo" value="scan" />
+          <div>
+            <strong>SCAN</strong>
+            <span class="desc">Prefers the nearest eligible car along the shaft.</span>
+          </div>
+        </label>
+        <label class="algo-option">
+          <input type="radio" name="algo" value="destination" />
+          <div>
+            <strong>Destination dispatch</strong>
+            <span class="desc">Groups calls with a light home-floor preference.</span>
+          </div>
+        </label>
+        <label class="algo-option">
+          <input type="radio" name="algo" value="priority" />
+          <div>
+            <strong>Priority service</strong>
+            <span class="desc">Gives a slight preference to the priority car.</span>
+          </div>
+        </label>
+        <label class="algo-option">
+          <input type="radio" name="algo" value="energy" />
+          <div>
+            <strong>Energy saver</strong>
+            <span class="desc">Favors shorter, lower-energy movement.</span>
+          </div>
+        </label>
+        <label class="algo-option">
+          <input type="radio" name="algo" value="roundRobin" />
+          <div>
+            <strong>Round robin</strong>
+            <span class="desc">Alternates idle lifts to balance usage.</span>
           </div>
         </label>
         <label class="algo-option">

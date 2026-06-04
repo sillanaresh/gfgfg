@@ -16,6 +16,7 @@ const lifts = Array.from(document.querySelectorAll('.lift-wrap')).map((el) => ({
   doors: el.querySelectorAll('.door'),
   currentFloor: randomFloor(),
   direction: 'idle',
+  lastDirection: 'idle',
   timer: null,
 }));
 
@@ -151,6 +152,7 @@ function travelLiftTo(lift, destFloor, onArrive) {
     return;
   }
   lift.direction = lift.currentFloor < destFloor ? 'up' : 'down';
+  lift.lastDirection = lift.direction;
   renderLed(lift);
   lift.timer = setInterval(() => {
     if (lift.direction === 'up') lift.currentFloor++;
@@ -169,16 +171,89 @@ function travelLiftTo(lift, destFloor, onArrive) {
 
 // ---------- scheduling algorithms ----------
 
+let roundRobinIndex = 0;
+
+function distanceFromLobby(lift) {
+  return Math.abs(lift.currentFloor - LOBBY_FLOOR);
+}
+
+function chooseByLowestScore(idle, score) {
+  return idle.reduce((best, lift) =>
+    score(lift) < score(best) ? lift : best
+  );
+}
+
+function chooseByHighestScore(idle, score) {
+  return idle.reduce((best, lift) =>
+    score(lift) > score(best) ? lift : best
+  );
+}
+
 const ALGORITHMS = {
   nearest: {
     name: 'Nearest idle',
+    choose: (idle) => chooseByLowestScore(idle, distanceFromLobby),
+  },
+  eta: {
+    name: 'Shortest ETA',
+    choose: (idle) => chooseByLowestScore(idle, distanceFromLobby),
+  },
+  look: {
+    name: 'LOOK',
     choose: (idle) =>
-      idle.reduce((best, l) =>
-        Math.abs(l.currentFloor - LOBBY_FLOOR) <
-        Math.abs(best.currentFloor - LOBBY_FLOOR)
-          ? l
-          : best
+      chooseByLowestScore(
+        idle,
+        (lift) =>
+          distanceFromLobby(lift) +
+          (lift.lastDirection === 'up' ? 0 : 0.25)
       ),
+  },
+  scan: {
+    name: 'SCAN',
+    choose: (idle) =>
+      chooseByLowestScore(
+        idle,
+        (lift) =>
+          distanceFromLobby(lift) +
+          (lift.currentFloor < LOBBY_FLOOR ? 0.5 : 0)
+      ),
+  },
+  destination: {
+    name: 'Destination dispatch',
+    choose: (idle) =>
+      chooseByLowestScore(
+        idle,
+        (lift) =>
+          distanceFromLobby(lift) + Math.abs(lift.currentFloor - 1) * 0.1
+      ),
+  },
+  priority: {
+    name: 'Priority service',
+    choose: (idle) =>
+      chooseByLowestScore(
+        idle,
+        (lift) =>
+          distanceFromLobby(lift) +
+          (lift.el.id === 'lift-left' ? 0 : 0.35)
+      ),
+  },
+  energy: {
+    name: 'Energy saver',
+    choose: (idle) =>
+      chooseByLowestScore(
+        idle,
+        (lift) =>
+          distanceFromLobby(lift) +
+          Math.max(lift.currentFloor - 1, 0) * 0.15
+      ),
+  },
+  roundRobin: {
+    name: 'Round robin',
+    choose: (idle) => {
+      const lift = idle[roundRobinIndex % idle.length];
+      roundRobinIndex += 1;
+      return lift;
+    },
   },
   random: {
     name: 'Random',
@@ -186,13 +261,7 @@ const ALGORITHMS = {
   },
   furthest: {
     name: 'Furthest idle',
-    choose: (idle) =>
-      idle.reduce((best, l) =>
-        Math.abs(l.currentFloor - LOBBY_FLOOR) >
-        Math.abs(best.currentFloor - LOBBY_FLOOR)
-          ? l
-          : best
-      ),
+    choose: (idle) => chooseByHighestScore(idle, distanceFromLobby),
   },
 };
 
